@@ -23,11 +23,13 @@ Default login credentials:
 
 - Username: `admin`
 - Password: `password123`
+- Email: `admin@example.com`
 
 You can override these with environment variables:
 
 - `APP_USERNAME`
 - `APP_PASSWORD`
+- `APP_EMAIL`
 - `FLASK_SECRET_KEY`
 
 ## Deploy To Azure App Service (Quickstart Style)
@@ -56,7 +58,7 @@ Notes:
 3. Configure app settings for production credentials:
 
 ```powershell
-az webapp config appsettings set --name <unique-app-name> --resource-group <resource-group-name> --settings APP_USERNAME=<your-user> APP_PASSWORD=<your-pass> FLASK_SECRET_KEY=<long-random-secret>
+az webapp config appsettings set --name <unique-app-name> --resource-group <resource-group-name> --settings APP_USERNAME=<your-user> APP_PASSWORD=<your-pass> APP_EMAIL=<your-email> FLASK_SECRET_KEY=<long-random-secret>
 ```
 
 4. Browse to:

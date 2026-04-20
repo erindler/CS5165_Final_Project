@@ -5,11 +5,29 @@ from flask import Flask, redirect, render_template, request, session, url_for
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=bool(os.environ.get("WEBSITE_HOSTNAME")),
+)
 
 # For this assignment starter, credentials are intentionally simple.
 APP_USERNAME = os.environ.get("APP_USERNAME", "admin")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "password123")
 APP_EMAIL = os.environ.get("APP_EMAIL", "admin@example.com")
+
+
+@app.before_request
+def enforce_https_on_app_service():
+    # On Azure App Service, redirect plain HTTP requests to HTTPS.
+    if not os.environ.get("WEBSITE_HOSTNAME"):
+        return None
+
+    proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+    if proto != "https":
+        return redirect(request.url.replace("http://", "https://", 1), code=301)
+
+    return None
 
 
 @app.route("/")

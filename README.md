@@ -61,7 +61,13 @@ Notes:
 az webapp config appsettings set --name <unique-app-name> --resource-group <resource-group-name> --settings APP_USERNAME=<your-user> APP_PASSWORD=<your-pass> APP_EMAIL=<your-email> FLASK_SECRET_KEY=<long-random-secret>
 ```
 
-4. Browse to:
+4. Enforce HTTPS at the App Service level:
+
+```powershell
+az webapp update --name <unique-app-name> --resource-group <resource-group-name> --set httpsOnly=true
+```
+
+5. Browse to:
 
 ```text
 https://<unique-app-name>.azurewebsites.net

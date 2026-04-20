@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Welcome, {{ username }}</h1>
+    <form method="post" action="{{ url_for('logout') }}">
+      <button type="submit" class="secondary">Log Out</button>
+    </form>
+  </header>
+
+  <main class="dashboard-wrap">
+    <section class="card">
+      <h2>Empty Dashboard</h2>
+      <p class="subtext">Your dashboard widgets and data will appear here.</p>
+    </section>
+  </main>
+</body>
+</html>

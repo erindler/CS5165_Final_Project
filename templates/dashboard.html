@@ -10,6 +10,7 @@
   <header class="topbar">
     <h1>Welcome, {{ username }}</h1>
     <form method="post" action="{{ url_for('logout') }}">
+      <input id="logout_csrf_token" name="csrf_token" type="hidden" value="{{ csrf_token }}">
       <button type="submit" class="secondary">Log Out</button>
     </form>
   </header>

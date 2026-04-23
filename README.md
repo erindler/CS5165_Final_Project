@@ -6,6 +6,21 @@ This project is a minimal Flask web app for your assignment:
 - Protected dashboard at `/dashboard`
 - Dashboard currently shows: `Empty Dashboard`
 
+## Security Notes (Now Implemented)
+
+The app now includes baseline web security protections:
+
+- HTTPS redirect support for Azure App Service
+- Secure session cookies on Azure (`Secure`, `HttpOnly`, `SameSite=Lax`)
+- CSRF protection for login and logout forms
+- Security response headers:
+	- `Strict-Transport-Security` (on Azure)
+	- `Content-Security-Policy`
+	- `X-Frame-Options: DENY`
+	- `X-Content-Type-Options: nosniff`
+	- `Referrer-Policy`
+	- `Permissions-Policy`
+
 ## Local Run
 
 From the project root:
@@ -72,6 +87,44 @@ az webapp update --name <unique-app-name> --resource-group <resource-group-name>
 ```text
 https://<unique-app-name>.azurewebsites.net
 ```
+
+## If Browser Shows "Dangerous Website"
+
+If your Azure URL is flagged as dangerous, it is usually a domain reputation/interstitial issue (browser safe-browsing or SmartScreen), not only an app code issue.
+
+Use this checklist:
+
+1. Verify HTTPS-only and TLS settings:
+
+```powershell
+az webapp update --name <app-name> --resource-group <resource-group> --set httpsOnly=true
+az webapp config set --name <app-name> --resource-group <resource-group> --min-tls-version 1.2
+```
+
+2. Confirm production secrets are set (do not use defaults):
+
+```powershell
+az webapp config appsettings set --name <app-name> --resource-group <resource-group> --settings APP_USERNAME=<your-user> APP_PASSWORD=<your-pass> APP_EMAIL=<your-email> FLASK_SECRET_KEY=<long-random-secret>
+```
+
+3. Check response headers from your deployed URL:
+
+```powershell
+curl -I https://<app-name>.azurewebsites.net/
+```
+
+4. Consider using a custom domain for better trust/reputation than a random generated subdomain:
+
+```powershell
+az webapp config hostname add --webapp-name <app-name> --resource-group <resource-group> --hostname <your-domain>
+```
+
+5. Request reputation review if still flagged:
+
+- Microsoft SmartScreen report site (report as safe)
+- Google Safe Browsing false-positive review
+
+Note: reputation systems can take time to reclassify a site even after technical fixes are complete.
 
 ## Optional: Stream Logs
 

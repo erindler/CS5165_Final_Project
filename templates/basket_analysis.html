@@ -6,13 +6,12 @@
   <title>Basket Analysis</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='basket_analysis.css') }}">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <h1>Basket Analysis — {{ username }}</h1>
+    <h1>Basket Analysis</h1>
     <nav class="topbar-nav">
-      <a href="{{ url_for('dashboard') }}" class="topbar-nav-link">Dashboard</a>
+      <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
       <form method="post" action="{{ url_for('logout') }}" class="logout-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="secondary">Log Out</button>
@@ -20,20 +19,31 @@
     </nav>
   </header>
 
-  {# Hidden CSRF token for JS fetch calls #}
-  <input type="hidden" id="csrf_token" value="{{ csrf_token }}">
+  {# All Jinja values passed to JS via a JSON data block — no inline scripts needed #}
+  <script id="page-data" type="application/json">
+    {
+      "hasResults":   {{ (results is not none) | tojson }},
+      "hasError":     {{ (error is not none) | tojson }},
+      "csrfToken":    {{ csrf_token | tojson }},
+      "cooccurrence": {{ (results.cooccurrence[:10] if results else []) | tojson }},
+      "pollUrl":      {{ url_for('basket_analysis_results') | tojson }},
+      "refreshUrl":   {{ url_for('basket_analysis_refresh') | tojson }}
+    }
+  </script>
 
   <main class="basket-wrap">
 
     <div class="method-note">
       <strong>Method:</strong> Each household's purchase history is encoded as a binary vector of commodity flags.
-      A <strong>Random Forest Classifier</strong> is trained per commodity — target = "did this household buy X?",
+      A <strong>Random Forest Classifier</strong> is trained per commodity &mdash; target = &ldquo;did this household buy X?&rdquo;,
       features = all other commodity flags. Feature importances reveal which co-purchases are most predictive,
       identifying the strongest cross-sell opportunities.
     </div>
 
     <div id="content">
+
       {% if error %}
+
         <div class="card full">
           <div class="state-center">
             <p class="error">{{ error }}</p>
@@ -42,202 +52,107 @@
         </div>
 
       {% elif results is none %}
+
         <div class="card full">
-          <div class="state-center" id="loadingState">
+          <div class="state-center">
             <div class="spinner"></div>
-            <p><strong>Running basket analysis…</strong></p>
-            <p>Training Random Forest models on household data. This takes ~15–30 s.</p>
+            <p><strong>Running basket analysis&hellip;</strong></p>
+            <p>Training Random Forest models on household data. This takes ~15&ndash;30 s.</p>
           </div>
         </div>
 
       {% else %}
-        {{ render_results(results) }}
+
+        <div class="two-col">
+          <div class="card limited">
+            <p class="section-title">Top Co-purchased Commodity Pairs</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Commodity A</th>
+                  <th>Commodity B</th>
+                  <th>Households</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% set max_cnt = results.cooccurrence[0].joint_households if results.cooccurrence else 1 %}
+                {% for pair in results.cooccurrence[:12] %}
+                <tr>
+                  <td class="rank">{{ loop.index }}</td>
+                  <td>{{ pair.commodity_a }}</td>
+                  <td>{{ pair.commodity_b }}</td>
+                  <td>
+                    <div class="bar-cell">
+                      <div class="bar-track">
+                        <div class="bar-fill" data-pct="{{ [1, (pair.joint_households / max_cnt * 100) | int] | max }}"></div>
+                      </div>
+                      <span class="bar-num">{{ pair.joint_households }}</span>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card limited">
+            <p class="section-title">Co-purchase Frequency (top 10)</p>
+            <div class="chart-box">
+              <canvas id="coChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="card full">
+          <p class="section-title">Cross-sell Recommendations &mdash; Random Forest</p>
+          <p class="cs-intro">
+            Each row is a target commodity and the commodities that most strongly predict its purchase.
+            AUC &gt; 0.70 is a reliable cross-sell signal. Click to expand.
+          </p>
+          {% for item in results.crosssell %}
+          <div class="cs-item">
+            <div class="cs-header">
+              <span class="target">{{ item.target }}</span>
+              <span class="auc-pill{% if item.auc < 0.65 %} low{% endif %}">AUC {{ item.auc }}</span>
+              <span class="cs-toggle">&#9660;</span>
+            </div>
+            <div class="cs-body">
+              <p>
+                Households that buy
+                <strong>{{ item.top_predictors[0].commodity if item.top_predictors else '&mdash;' }}</strong>
+                {% if item.top_predictors | length > 1 %}
+                  and <strong>{{ item.top_predictors[1].commodity }}</strong>
+                {% endif %}
+                are significantly more likely to also purchase <strong>{{ item.target }}</strong>.
+                Consider bundling promotions or adjacent shelf placement.
+              </p>
+              {% set max_imp = item.top_predictors[0].importance if item.top_predictors else 0.001 %}
+              {% for pred in item.top_predictors %}
+              <div class="pred-row">
+                <span class="pred-name">{{ pred.commodity }}</span>
+                <div class="pred-track">
+                  <div class="pred-fill" data-pct="{{ [1, (pred.importance / max_imp * 100) | int] | max }}"></div>
+                </div>
+                <span class="pred-val">{{ "%.4f" | format(pred.importance) }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
       {% endif %}
+
     </div>
 
-    <div class="align-right">
-      <button class="btn-secondary" id="refreshBtn" onclick="refreshAnalysis()">↺ Re-run analysis</button>
+    <div class="refresh-row">
+      <button class="btn-secondary" id="refreshBtn">&#8635; Re-run analysis</button>
     </div>
 
   </main>
 
-{# ── Macro: render full results (also called after page reload from polling) ── #}
-{% macro render_results(r) %}
-
-  <div class="stat-row">
-    <div class="stat-box"><div class="label">Households</div><div class="value">{{ r.n_households }}</div></div>
-    <div class="stat-box"><div class="label">Commodities</div><div class="value">{{ r.n_commodities }}</div></div>
-    <div class="stat-box"><div class="label">Top pairs found</div><div class="value">{{ r.cooccurrence | length }}</div></div>
-    <div class="stat-box"><div class="label">Models trained</div><div class="value">{{ r.crosssell | length }}</div></div>
-  </div>
-
-  <div class="two-col">
-    <div class="card full">
-      <p class="section-title">Top Co-purchased Commodity Pairs</p>
-      <table>
-        <thead>
-          <tr><th>#</th><th>Commodity A</th><th>Commodity B</th><th>Households</th></tr>
-        </thead>
-        <tbody>
-          {% set max_cnt = r.cooccurrence[0].joint_households if r.cooccurrence else 1 %}
-          {% for pair in r.cooccurrence[:12] %}
-          <tr>
-            <td class="rank">{{ loop.index }}</td>
-            <td>{{ pair.commodity_a }}</td>
-            <td>{{ pair.commodity_b }}</td>
-            <td>
-              <div class="bar-cell">
-                <div class="bar-track">
-                  <div class="bar-fill" data-fill="{{ (pair.joint_households / max_cnt * 100)|int }}"></div>
-                </div>
-                <span class="bar-num">{{ pair.joint_households }}</span>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="card full">
-      <p class="section-title">Co-purchase Frequency (top 10)</p>
-      <div class="chart-box"><canvas id="coChart"></canvas></div>
-    </div>
-  </div>
-
-  <div class="card full">
-    <p class="section-title">Cross-sell Recommendations — Random Forest</p>
-    <p class="basket-note">
-      Each row is a target commodity and the commodities that most strongly predict its purchase.
-      AUC &gt; 0.70 is a reliable cross-sell signal. Click to expand.
-    </p>
-    <div>
-      {% for item in r.crosssell %}
-      <div class="cs-item" onclick="this.classList.toggle('open')">
-        <div class="cs-header">
-          <span class="target">{{ item.target }}</span>
-          <span class="auc-pill {% if item.auc < 0.65 %}low{% endif %}">AUC {{ item.auc }}</span>
-          <span class="cs-toggle">▼</span>
-        </div>
-        <div class="cs-body">
-          <p>
-            Households that buy
-            <strong>{{ item.top_predictors[0].commodity if item.top_predictors else '—' }}</strong>
-            {% if item.top_predictors|length > 1 %}
-              and <strong>{{ item.top_predictors[1].commodity }}</strong>
-            {% endif %}
-            are significantly more likely to also purchase <strong>{{ item.target }}</strong>.
-            Consider bundling promotions or adjacent shelf placement.
-          </p>
-          {% set max_imp = item.top_predictors[0].importance if item.top_predictors else 0.001 %}
-          {% for pred in item.top_predictors %}
-          <div class="pred-row">
-            <span class="pred-name">{{ pred.commodity }}</span>
-            <div class="pred-track">
-              <div class="pred-fill" data-fill="{{ (pred.importance / max_imp * 100)|int }}"></div>
-            </div>
-            <span class="pred-val">{{ "%.4f"|format(pred.importance) }}</span>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-
-{% endmacro %}
-
-{% if results %}{{ render_results(results) }}{% endif %}
-
-<script>
-  /* ── Chart.js bar chart ── */
-  {% if results %}
-  (function () {
-    const pairs  = {{ results.cooccurrence[:10] | tojson }};
-    const labels = pairs.map(p => p.commodity_a + ' × ' + p.commodity_b);
-    const values = pairs.map(p => p.joint_households);
-    new Chart(document.getElementById('coChart'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          data: values,
-          backgroundColor: 'rgba(11,99,206,0.15)',
-          borderColor:     'rgba(11,99,206,0.7)',
-          borderWidth: 1.5,
-          borderRadius: 4,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        indexAxis: 'y',
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { color: '#5a6475', font: { size: 10 } }, grid: { color: '#eee' } },
-          y: { ticks: { color: '#1c2230', font: { size: 10 } }, grid: { display: false } }
-        }
-      }
-    });
-
-    const applyFillWidths = () => {
-      document.querySelectorAll('.bar-fill[data-fill]').forEach(el => {
-        el.style.width = el.dataset.fill + '%';
-      });
-      document.querySelectorAll('.pred-fill[data-fill]').forEach(el => {
-        el.style.width = el.dataset.fill + '%';
-      });
-    };
-
-    applyFillWidths();
-  })();
-  {% endif %}
-
-  /* ── Poll while analysis is running ── */
-  {% if results is none and not error %}
-  let _poll = setInterval(async () => {
-    const res  = await fetch('{{ url_for("basket_analysis_results") }}');
-    const json = await res.json();
-    if (json.status === 'done') {
-      clearInterval(_poll);
-      window.location.reload();
-    } else if (json.status === 'error') {
-      clearInterval(_poll);
-      document.getElementById('content').innerHTML =
-        '<div class="card full"><div class="state-center">' +
-        '<p class="error">Analysis error</p><p>' + json.message + '</p></div></div>';
-    }
-  }, 3000);
-  {% endif %}
-
-  /* ── Re-run button ── */
-  async function refreshAnalysis() {
-    const csrfToken = document.getElementById('csrf_token').value;
-    document.getElementById('refreshBtn').textContent = '↻ Running…';
-    document.getElementById('refreshBtn').disabled = true;
-
-    const body = new URLSearchParams({ csrf_token: csrfToken });
-    await fetch('{{ url_for("basket_analysis_refresh") }}', { method: 'POST', body });
-
-    document.getElementById('content').innerHTML =
-      '<div class="card full"><div class="state-center" id="loadingState">' +
-      '<div class="spinner"></div><p><strong>Re-running analysis…</strong></p>' +
-      '<p>Training Random Forest models on household data.</p></div></div>';
-
-    let _rp = setInterval(async () => {
-      const res  = await fetch('{{ url_for("basket_analysis_results") }}');
-      const json = await res.json();
-      if (json.status === 'done') {
-        clearInterval(_rp);
-        window.location.reload();
-      } else if (json.status === 'error') {
-        clearInterval(_rp);
-        document.getElementById('content').innerHTML =
-          '<div class="card full"><div class="state-center">' +
-          '<p class="error">' + json.message + '</p></div></div>';
-      }
-    }, 3000);
-  }
-</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="{{ url_for('static', filename='basket_analysis.js') }}"></script>
 </body>
 </html>

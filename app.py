@@ -27,7 +27,7 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "password123")
 APP_EMAIL = os.environ.get("APP_EMAIL", "admin@example.com")
 
 # Directory containing CSV files for local dev (ignored when PGHOST is set)
-DATA_DIR = os.environ.get("DATA_DIR", ".")
+DATA_DIR = os.environ.get("DATA_DIR", "./data")
 
 
 def get_csrf_token() -> str:
@@ -72,11 +72,6 @@ def set_security_headers(response):
     if is_app_service:
         response.headers["Strict-Transport-Security"] = "max-age=31536000"
     return response
-
-
-# ---------------------------------------------------------------------------
-# Auth routes — unchanged from partner's version
-# ---------------------------------------------------------------------------
 
 @app.route("/")
 def index():
@@ -131,12 +126,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ---------------------------------------------------------------------------
-# Basket Analysis — Step 7
-# ---------------------------------------------------------------------------
-
-# In-memory cache: the ML run takes ~15-30 s, so we do it once in a
-# background thread.  Swap for Redis in a multi-instance production deploy.
 _analysis_cache: dict | None = None
 _analysis_lock = threading.Lock()
 _analysis_error: str | None = None

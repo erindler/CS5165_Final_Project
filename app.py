@@ -203,5 +203,79 @@ def basket_analysis_refresh():
     return jsonify({"status": "started"})
 
 
+_churn_cache: dict | None = None
+_churn_lock = threading.Lock()
+_churn_error: str | None = None
+ 
+ 
+def _run_churn_background() -> None:
+    global _churn_cache, _churn_error
+    try:
+        from churn_ml import run_churn_analysis
+        result = run_churn_analysis(csv_dir=DATA_DIR)
+        with _churn_lock:
+            _churn_cache = result
+            _churn_error = None
+    except Exception as exc:
+        with _churn_lock:
+            _churn_error = str(exc)
+ 
+ 
+@app.route("/churn")
+def churn():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+ 
+    with _churn_lock:
+        cached = _churn_cache
+        errored = _churn_error
+ 
+    if cached is None and errored is None:
+        t = threading.Thread(target=_run_churn_background, daemon=True)
+        t.start()
+ 
+    return render_template(
+        "churn.html",
+        username=session.get("username", "User"),
+        email=session.get("email", ""),
+        results=cached,
+        error=errored,
+        csrf_token=get_csrf_token(),
+    )
+ 
+ 
+@app.route("/churn/results")
+def churn_results():
+    if not session.get("logged_in"):
+        return jsonify({"status": "unauthorized"}), 401
+ 
+    with _churn_lock:
+        cached = _churn_cache
+        errored = _churn_error
+ 
+    if errored:
+        return jsonify({"status": "error", "message": errored})
+    if cached is None:
+        return jsonify({"status": "running"})
+    return jsonify({"status": "done", "data": cached})
+ 
+ 
+@app.route("/churn/refresh", methods=["POST"])
+def churn_refresh():
+    if not session.get("logged_in"):
+        return jsonify({"status": "unauthorized"}), 401
+    if not is_valid_csrf(request.form.get("csrf_token", "")):
+        return jsonify({"status": "forbidden"}), 403
+ 
+    global _churn_cache, _churn_error
+    with _churn_lock:
+        _churn_cache = None
+        _churn_error = None
+ 
+    t = threading.Thread(target=_run_churn_background, daemon=True)
+    t.start()
+    return jsonify({"status": "started"})
+ 
+ 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)

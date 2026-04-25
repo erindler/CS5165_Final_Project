@@ -1,6 +1,9 @@
 import os
 import hmac
+import csv
 import secrets
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -30,6 +33,38 @@ app.config.update(
 APP_USERNAME = os.environ.get("APP_USERNAME", "admin")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "password123")
 APP_EMAIL = os.environ.get("APP_EMAIL", "admin@example.com")
+
+HOUSEHOLD_HEADERS = [
+    "HSHD_NUM",
+    "L",
+    "AGE_RANGE",
+    "MARITAL",
+    "INCOME_RANGE",
+    "HOMEOWNER",
+    "HSHD_COMPOSITION",
+    "HH_SIZE",
+    "CHILDREN",
+]
+
+PRODUCT_HEADERS = [
+    "PRODUCT_NUM",
+    "DEPARTMENT",
+    "COMMODITY",
+    "BRAND_TY",
+    "NATURAL_ORGANIC_FLAG",
+]
+
+TRANSACTION_HEADERS = [
+    "BASKET_NUM",
+    "HSHD_NUM",
+    "PURCHASE_DATE",
+    "PRODUCT_NUM",
+    "SPEND",
+    "UNITS",
+    "STORE_R",
+    "WEEK_NUM",
+    "YEAR",
+]
 
 
 def _normalize_conninfo_key(raw_key: str) -> str:
@@ -150,6 +185,201 @@ def get_db_connect_kwargs() -> dict[str, Any]:
         "or POSTGRES_HOST/POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD. "
         f"Present keys: {present}."
     )
+
+
+def _is_nullish(value: str | None) -> bool:
+    if value is None:
+        return True
+    text = value.strip()
+    return text == "" or text.lower() == "null"
+
+
+def _null_if_empty(value: str | None) -> str | None:
+    if _is_nullish(value):
+        return None
+    return value.strip()
+
+
+def _parse_optional_int(value: str | None, field_name: str) -> int | None:
+    cleaned = _null_if_empty(value)
+    if cleaned is None:
+        return None
+    if not cleaned.isdigit():
+        raise ValueError(f"{field_name} must be a whole number. Got '{value}'.")
+    return int(cleaned)
+
+
+def _parse_decimal(value: str | None, field_name: str) -> Decimal:
+    cleaned = _null_if_empty(value)
+    if cleaned is None:
+        raise ValueError(f"{field_name} is required.")
+    try:
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        raise ValueError(f"{field_name} must be numeric. Got '{value}'.")
+
+
+def _parse_purchase_date(value: str | None) -> datetime.date:
+    cleaned = _null_if_empty(value)
+    if cleaned is None:
+        raise ValueError("PURCHASE_DATE is required.")
+
+    # Accept both assignment format (DD-MON-YY) and ISO format.
+    for date_format in ("%d-%b-%y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(cleaned, date_format).date()
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"PURCHASE_DATE '{value}' is invalid. Use DD-MON-YY or YYYY-MM-DD."
+    )
+
+
+def _load_csv_rows(uploaded_file, required_headers: list[str], label: str) -> list[dict[str, str]]:
+    if uploaded_file is None or uploaded_file.filename == "":
+        raise ValueError(f"Please provide the {label} CSV file.")
+
+    raw_bytes = uploaded_file.stream.read()
+    if not raw_bytes:
+        raise ValueError(f"The {label} CSV file is empty.")
+
+    content = raw_bytes.decode("utf-8-sig", errors="replace")
+    reader = csv.reader(content.splitlines())
+
+    try:
+        header_row = next(reader)
+    except StopIteration:
+        raise ValueError(f"The {label} CSV file is empty.")
+
+    normalized_headers = [header.strip().upper() for header in header_row]
+    missing_headers = [name for name in required_headers if name not in normalized_headers]
+    if missing_headers:
+        missing_list = ", ".join(missing_headers)
+        raise ValueError(f"{label} CSV is missing required headers: {missing_list}.")
+
+    index_by_header = {header: normalized_headers.index(header) for header in required_headers}
+
+    rows: list[dict[str, str]] = []
+    for row in reader:
+        if not row or all(cell.strip() == "" for cell in row):
+            continue
+
+        shaped_row: dict[str, str] = {}
+        for header in required_headers:
+            cell_index = index_by_header[header]
+            value = row[cell_index] if cell_index < len(row) else ""
+            shaped_row[header] = value.strip()
+        rows.append(shaped_row)
+
+    if not rows:
+        raise ValueError(f"The {label} CSV file has no data rows.")
+
+    return rows
+
+
+def _insert_uploaded_rows(
+    household_rows: list[dict[str, str]],
+    product_rows: list[dict[str, str]],
+    transaction_rows: list[dict[str, str]],
+) -> dict[str, int]:
+    household_values = [
+        (
+            row["HSHD_NUM"],
+            _null_if_empty(row["L"]),
+            _null_if_empty(row["AGE_RANGE"]),
+            _null_if_empty(row["MARITAL"]),
+            _null_if_empty(row["INCOME_RANGE"]),
+            _null_if_empty(row["HOMEOWNER"]),
+            _null_if_empty(row["HSHD_COMPOSITION"]),
+            _parse_optional_int(row["HH_SIZE"], "HH_SIZE"),
+            _parse_optional_int(row["CHILDREN"], "CHILDREN"),
+        )
+        for row in household_rows
+    ]
+
+    product_values = [
+        (
+            row["PRODUCT_NUM"],
+            _null_if_empty(row["DEPARTMENT"]),
+            _null_if_empty(row["COMMODITY"]),
+            _null_if_empty(row["BRAND_TY"]),
+            _null_if_empty(row["NATURAL_ORGANIC_FLAG"]),
+        )
+        for row in product_rows
+    ]
+
+    transaction_values = [
+        (
+            row["BASKET_NUM"],
+            row["HSHD_NUM"],
+            _parse_purchase_date(row["PURCHASE_DATE"]),
+            row["PRODUCT_NUM"],
+            _parse_decimal(row["SPEND"], "SPEND"),
+            _parse_decimal(row["UNITS"], "UNITS"),
+            _null_if_empty(row["STORE_R"]),
+            _parse_optional_int(row["WEEK_NUM"], "WEEK_NUM"),
+            _parse_optional_int(row["YEAR"], "YEAR"),
+        )
+        for row in transaction_rows
+    ]
+
+    with psycopg.connect(**get_db_connect_kwargs(), row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.executemany(
+                """
+                INSERT INTO retail.households (
+                    hshd_num,
+                    loyalty_flag,
+                    age_range,
+                    marital,
+                    income_range,
+                    homeowner,
+                    hshd_composition,
+                    hh_size,
+                    children
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                household_values,
+            )
+
+            cur.executemany(
+                """
+                INSERT INTO retail.products (
+                    product_num,
+                    department,
+                    commodity,
+                    brand_ty,
+                    natural_organic_flag
+                ) VALUES (%s, %s, %s, %s, %s)
+                """,
+                product_values,
+            )
+
+            cur.executemany(
+                """
+                INSERT INTO retail.transactions (
+                    basket_num,
+                    hshd_num,
+                    purchase_date,
+                    product_num,
+                    spend,
+                    units,
+                    store_r,
+                    week_num,
+                    year
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                transaction_values,
+            )
+
+        conn.commit()
+
+    return {
+        "households": len(household_values),
+        "products": len(product_values),
+        "transactions": len(transaction_values),
+    }
 
 
 def fetch_data_pulls(hshd_num: str) -> list[dict[str, Any]]:
@@ -311,6 +541,8 @@ def data_pulls():
     hshd_num = request.args.get("hshd_num", "").strip()
     rows: list[dict[str, Any]] = []
     error = None
+    upload_error = request.args.get("upload_error", "")
+    upload_success = request.args.get("upload_success", "")
 
     if hshd_num:
         if not hshd_num.isdigit():
@@ -333,7 +565,58 @@ def data_pulls():
         hshd_num=hshd_num,
         rows=rows,
         error=error,
+        upload_error=upload_error,
+        upload_success=upload_success,
     )
+
+
+@app.route("/upload-csvs", methods=["POST"])
+def upload_csvs():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    if not is_valid_csrf(request.form.get("csrf_token", "")):
+        return redirect(
+            url_for("data_pulls", upload_error="Session expired. Refresh and try again.")
+        )
+
+    try:
+        household_rows = _load_csv_rows(
+            request.files.get("households_csv"), HOUSEHOLD_HEADERS, "households"
+        )
+        product_rows = _load_csv_rows(
+            request.files.get("products_csv"), PRODUCT_HEADERS, "products"
+        )
+        transaction_rows = _load_csv_rows(
+            request.files.get("transactions_csv"), TRANSACTION_HEADERS, "transactions"
+        )
+
+        counts = _insert_uploaded_rows(household_rows, product_rows, transaction_rows)
+
+        success_message = (
+            f"Imported {counts['households']} household rows, "
+            f"{counts['products']} product rows, and "
+            f"{counts['transactions']} transaction rows."
+        )
+        return redirect(url_for("data_pulls", upload_success=success_message))
+    except RuntimeError as exc:
+        return redirect(url_for("data_pulls", upload_error=str(exc)))
+    except ValueError as exc:
+        return redirect(url_for("data_pulls", upload_error=str(exc)))
+    except psycopg.Error as exc:
+        return redirect(
+            url_for(
+                "data_pulls",
+                upload_error=f"Unable to import data into PostgreSQL: {exc.__class__.__name__}.",
+            )
+        )
+    except Exception:
+        return redirect(
+            url_for(
+                "data_pulls",
+                upload_error="Unexpected import failure. Please verify the CSV formats and retry.",
+            )
+        )
 
 
 @app.route("/db-health")

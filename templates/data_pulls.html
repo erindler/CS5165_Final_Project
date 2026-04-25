@@ -23,6 +23,46 @@
       <h2>Household Transaction Pull</h2>
       <p class="subtext">Signed in as {{ email }}</p>
 
+      <section class="upload-panel" aria-label="CSV upload panel">
+        <h3>Upload CSVs Into Database</h3>
+        <p class="subtext">Drop one households CSV, one products CSV, and one transactions CSV, then click Import Files.</p>
+
+        {% if upload_success %}
+        <p class="success" role="status">{{ upload_success }}</p>
+        {% endif %}
+
+        {% if upload_error %}
+        <p class="error" role="alert">{{ upload_error }}</p>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('upload_csvs') }}" enctype="multipart/form-data" id="csvUploadForm">
+          <input id="upload_csrf_token" name="csrf_token" type="hidden" value="{{ csrf_token }}">
+          <div class="drop-grid">
+            <label class="drop-zone" for="households_csv" data-target="households_csv">
+              <span class="drop-zone-title">Households CSV</span>
+              <span class="drop-zone-file" data-file-label="households_csv">Drop file here or click to choose</span>
+              <input id="households_csv" name="households_csv" type="file" accept=".csv,text/csv" required>
+            </label>
+
+            <label class="drop-zone" for="products_csv" data-target="products_csv">
+              <span class="drop-zone-title">Products CSV</span>
+              <span class="drop-zone-file" data-file-label="products_csv">Drop file here or click to choose</span>
+              <input id="products_csv" name="products_csv" type="file" accept=".csv,text/csv" required>
+            </label>
+
+            <label class="drop-zone" for="transactions_csv" data-target="transactions_csv">
+              <span class="drop-zone-title">Transactions CSV</span>
+              <span class="drop-zone-file" data-file-label="transactions_csv">Drop file here or click to choose</span>
+              <input id="transactions_csv" name="transactions_csv" type="file" accept=".csv,text/csv" required>
+            </label>
+          </div>
+
+          <div class="upload-actions">
+            <button type="submit">Import Files</button>
+          </div>
+        </form>
+      </section>
+
       <section class="join-graph" aria-label="Table relationship graph">
         <h3>Data Pull Join Graph</h3>
         <p class="subtext">households.hshd_num -> transactions.hshd_num <- products.product_num</p>
@@ -121,5 +161,6 @@
     </section>
   </main>
   <script src="{{ url_for('static', filename='data_pulls.js') }}"></script>
+  <script src="{{ url_for('static', filename='csv_upload.js') }}"></script>
 </body>
 </html>

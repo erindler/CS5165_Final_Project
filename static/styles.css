@@ -182,6 +182,61 @@ button.secondary {
   gap: 0.65rem;
 }
 
+.upload-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem;
+  margin: 0.75rem 0 1rem;
+  background: #f7fafc;
+}
+
+.upload-panel h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.drop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.8rem;
+}
+
+.drop-zone {
+  border: 2px dashed #9bb2cf;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.8rem;
+  min-height: 110px;
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  cursor: pointer;
+}
+
+.drop-zone.is-dragover {
+  border-color: var(--accent);
+  background: #eef5ff;
+}
+
+.drop-zone-title {
+  font-weight: 700;
+}
+
+.drop-zone-file {
+  color: var(--muted);
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.drop-zone input[type="file"] {
+  margin-top: 0.45rem;
+}
+
+.upload-actions {
+  margin-top: 0.8rem;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -218,6 +273,14 @@ tbody tr:nth-child(even) {
   padding: 0.65rem;
 }
 
+.success {
+  color: #0c5a2f;
+  background: #e8f7ef;
+  border: 1px solid #b8e6cc;
+  border-radius: 8px;
+  padding: 0.65rem;
+}
+
 @media (max-width: 700px) {
   .topbar {
     flex-direction: column;
@@ -235,6 +298,10 @@ tbody tr:nth-child(even) {
   }
 
   .join-graph-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .drop-grid {
     grid-template-columns: 1fr;
   }
 

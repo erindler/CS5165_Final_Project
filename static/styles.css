@@ -129,6 +129,46 @@ button.secondary {
   margin-bottom: 1rem;
 }
 
+.join-graph {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem;
+  margin: 0.75rem 0 1rem;
+  background: #f8fbff;
+}
+
+.join-graph h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.join-graph-grid {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) auto minmax(220px, 1.2fr) auto minmax(170px, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.join-node {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.join-node span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.join-edge {
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .query-form label {
   min-width: 100%;
 }
@@ -192,5 +232,13 @@ tbody tr:nth-child(even) {
   .query-actions {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .join-graph-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .join-edge {
+    text-align: center;
   }
 }

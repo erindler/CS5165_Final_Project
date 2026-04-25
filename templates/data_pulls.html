@@ -23,6 +23,27 @@
       <h2>Household Transaction Pull</h2>
       <p class="subtext">Signed in as {{ email }}</p>
 
+      <section class="join-graph" aria-label="Table relationship graph">
+        <h3>Data Pull Join Graph</h3>
+        <p class="subtext">households.hshd_num -> transactions.hshd_num <- products.product_num</p>
+        <div class="join-graph-grid">
+          <div class="join-node">
+            <strong>households</strong>
+            <span>hshd_num</span>
+          </div>
+          <div class="join-edge">hshd_num</div>
+          <div class="join-node">
+            <strong>transactions</strong>
+            <span>hshd_num, basket_num, purchase_date, product_num</span>
+          </div>
+          <div class="join-edge">product_num</div>
+          <div class="join-node">
+            <strong>products</strong>
+            <span>product_num</span>
+          </div>
+        </div>
+      </section>
+
       {% if error %}
       <p class="error" role="alert">{{ error }}</p>
       {% endif %}
@@ -43,6 +64,7 @@
             <tr>
               <th>Hshd_num</th>
               <th>Basket_num</th>
+              <th>Date</th>
               <th>Product_num</th>
               <th>Department</th>
               <th>Commodity</th>
@@ -66,6 +88,7 @@
               <tr>
                 <td>{{ row.Hshd_num }}</td>
                 <td>{{ row.Basket_num }}</td>
+                <td>{{ row.Date }}</td>
                 <td>{{ row.Product_num }}</td>
                 <td>{{ row.Department }}</td>
                 <td>{{ row.Commodity }}</td>
@@ -85,11 +108,11 @@
               {% endfor %}
             {% elif hshd_num %}
               <tr>
-                <td colspan="17" class="subtext">No rows found for hshd_num {{ hshd_num }}.</td>
+                <td colspan="18" class="subtext">No rows found for hshd_num {{ hshd_num }}.</td>
               </tr>
             {% else %}
               <tr>
-                <td colspan="17" class="subtext">Enter a hshd_num and click Query to load data pulls.</td>
+                <td colspan="18" class="subtext">Enter a hshd_num and click Query to load data pulls.</td>
               </tr>
             {% endif %}
           </tbody>

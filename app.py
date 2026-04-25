@@ -157,6 +157,7 @@ def fetch_data_pulls(hshd_num: str) -> list[dict[str, Any]]:
         SELECT
             t.hshd_num,
             t.basket_num,
+            t.purchase_date,
             t.product_num,
             COALESCE(p.department, '') AS department,
             COALESCE(p.commodity, '') AS commodity,
@@ -194,6 +195,7 @@ def fetch_data_pulls(hshd_num: str) -> list[dict[str, Any]]:
         {
             "Hshd_num": row["hshd_num"],
             "Basket_num": row["basket_num"],
+            "Date": row["purchase_date"],
             "Product_num": row["product_num"],
             "Department": row["department"],
             "Commodity": row["commodity"],

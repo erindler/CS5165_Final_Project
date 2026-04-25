@@ -34,6 +34,18 @@ flask --app app run
 
 Open `http://localhost:5000`.
 
+## PostgreSQL Configuration For Data Pulls
+
+The `/data-pulls` page now reads from PostgreSQL (`retail` schema tables), not CSV files.
+
+Configure one of these environment variable sets before running:
+
+- `DATABASE_URL` (for example: `postgresql://user:password@host:5432/dbname?sslmode=require`)
+- `PGHOST`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` (optional: `PGPORT`, `PGSSLMODE`)
+- `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (optional: `POSTGRES_PORT`, `POSTGRES_SSLMODE`)
+
+Azure App Service `POSTGRESQLCONNSTR_*` connection strings are also detected automatically.
+
 Default login credentials:
 
 - Username: `admin`

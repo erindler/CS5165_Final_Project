@@ -528,10 +528,22 @@ def login():
 def dashboard():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+
+    with _analysis_lock:
+        cached = _analysis_cache
+        errored = _analysis_error
+
+    # Start background job on first visit if nothing is cached or running
+    if cached is None and errored is None:
+        t = threading.Thread(target=_run_analysis_background, daemon=True)
+        t.start()
+
     return render_template(
         "dashboard.html",
         username=session.get("username", "User"),
         email=session.get("email", ""),
+        results=cached,
+        error=errored,
         csrf_token=get_csrf_token(),
     )
 
@@ -668,26 +680,7 @@ def _run_analysis_background() -> None:
 
 @app.route("/basket-analysis")
 def basket_analysis():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    with _analysis_lock:
-        cached = _analysis_cache
-        errored = _analysis_error
-
-    # Start background job on first visit
-    if cached is None and errored is None:
-        t = threading.Thread(target=_run_analysis_background, daemon=True)
-        t.start()
-
-    return render_template(
-        "basket_analysis.html",
-        username=session.get("username", "User"),
-        email=session.get("email", ""),
-        results=cached,
-        error=errored,
-        csrf_token=get_csrf_token(),
-    )
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/basket-analysis/results")

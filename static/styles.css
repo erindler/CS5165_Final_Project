@@ -84,7 +84,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-}
+}}
 
 .card {
   background: var(--surface);

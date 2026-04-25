@@ -12,7 +12,6 @@ from urllib.parse import parse_qs, urlparse
 
 import psycopg
 from psycopg.rows import dict_row
-from flask import Flask, redirect, render_template, request, session, url_for
 
 
 app = Flask(__name__)
@@ -801,4 +800,5 @@ def churn_refresh():
  
  
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", os.environ.get("WEBSITES_PORT", "8000")))
+    app.run(host="0.0.0.0", port=port)

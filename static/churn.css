@@ -131,13 +131,14 @@
 }
 
 /* Table */
-table {
+table .random-forest-table {
+  min-width: none;
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
 }
 
-th {
+table .random-forest-table th {
   text-align: left;
   padding: 0.45rem 0.65rem;
   font-size: 0.72rem;
@@ -148,16 +149,16 @@ th {
   border-bottom: 1px solid var(--border);
 }
 
-td {
+table .random-forest-table td {
   padding: 0.5rem 0.65rem;
   border-bottom: 1px solid var(--border);
 }
 
-tr:last-child td {
+table .random-forest-table tr:last-child td {
   border-bottom: none;
 }
 
-tr:hover td {
+table .random-forest-table tr:hover td {
   background: #f7f9fc;
 }
 

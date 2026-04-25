@@ -63,10 +63,9 @@
 
       {% else %}
 
-        <div class="two-col">
-          <div class="card limited">
+          <div class="card graph">
             <p class="section-title">Top Co-purchased Commodity Pairs</p>
-            <table>
+            <table class="random-forest-table">
               <thead>
                 <tr>
                   <th>#</th>
@@ -96,13 +95,12 @@
             </table>
           </div>
 
-          <div class="card limited">
+          <div class="card graph">
             <p class="section-title">Co-purchase Frequency (top 10)</p>
             <div class="chart-box">
               <canvas id="coChart"></canvas>
             </div>
           </div>
-        </div>
 
         <div class="card full">
           <p class="section-title">Cross-sell Recommendations &mdash; Random Forest</p>

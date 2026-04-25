@@ -1,0 +1,270 @@
+/* churn.css — Churn Prediction page styles */
+
+.churn-wrap {
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.card.full {
+  width: 100%;
+}
+
+.topbar-nav {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.logout-form {
+  margin: 0;
+}
+
+.nav-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.nav-link:hover {
+  color: var(--accent);
+}
+
+/* Stat chips */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.stat-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 4px 12px rgba(25, 39, 68, 0.06);
+}
+
+.stat-box .label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.stat-box .value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-box .value.churn-red {
+  color: var(--danger);
+}
+
+/* Two-column layout */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Section labels */
+.section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.25rem;
+}
+
+.card-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0 0 0.85rem;
+}
+
+/* Charts */
+.chart-box {
+  position: relative;
+  height: 260px;
+}
+
+/* Segment grid */
+.segment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.segment-card {
+  background: #fafbfd;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.segment-card h4 {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0 0 0.65rem;
+}
+
+.segment-chart-box {
+  position: relative;
+  height: 180px;
+}
+
+/* Table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+th {
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+tr:hover td {
+  background: #f7f9fc;
+}
+
+.rank {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* Progress bars */
+.bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+.bar-fill.bar-danger {
+  background: var(--danger);
+}
+
+.bar-num {
+  font-size: 0.8rem;
+  color: var(--accent);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.bar-num-danger {
+  font-size: 0.8rem;
+  color: var(--danger);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+/* Method note */
+.method-note {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.6;
+  background: #f0f5ff;
+  border: 1px solid #c9dafc;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+}
+
+.method-note strong {
+  color: var(--accent);
+}
+
+.method-note em {
+  color: var(--danger);
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* Loading / error */
+.state-center {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+}
+
+.spinner {
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Refresh */
+.refresh-row {
+  text-align: right;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

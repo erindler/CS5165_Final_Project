@@ -50,6 +50,36 @@ body {
   font-size: 1.25rem;
 }
 
+.topbar-nav {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+}
+
+.topbar-nav-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: .9rem;
+}
+
+.logout-form {
+  margin: 0;
+}
+
+.align-right {
+  text-align: right;
+}
+
+.basket-note {
+  font-size: .82rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.bar-fill,
+.pred-fill {
+  width: var(--fill-width, 0%);
 .topbar-actions {
   display: flex;
   align-items: center;

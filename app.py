@@ -2,6 +2,9 @@ import os
 import hmac
 import csv
 import secrets
+import threading
+
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -18,7 +21,6 @@ configured_secret = os.environ.get("FLASK_SECRET_KEY")
 if configured_secret:
     app.secret_key = configured_secret
 elif is_app_service:
-    # Keep production deploys safe even if FLASK_SECRET_KEY was not configured yet.
     app.secret_key = secrets.token_hex(32)
 else:
     app.secret_key = "dev-secret-change-me"
@@ -29,11 +31,12 @@ app.config.update(
     SESSION_COOKIE_SECURE=is_app_service,
 )
 
-# For this assignment starter, credentials are intentionally simple.
 APP_USERNAME = os.environ.get("APP_USERNAME", "admin")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "password123")
 APP_EMAIL = os.environ.get("APP_EMAIL", "admin@example.com")
 
+# Directory containing CSV files for local dev (ignored when PGHOST is set)
+DATA_DIR = os.environ.get("DATA_DIR", "./data")
 HOUSEHOLD_HEADERS = [
     "HSHD_NUM",
     "L",
@@ -461,14 +464,11 @@ def is_valid_csrf(form_token: str) -> bool:
 
 @app.before_request
 def enforce_https_on_app_service():
-    # On Azure App Service, redirect plain HTTP requests to HTTPS.
     if not os.environ.get("WEBSITE_HOSTNAME"):
         return None
-
     proto = request.headers.get("X-Forwarded-Proto", request.scheme)
     if proto != "https":
         return redirect(request.url.replace("http://", "https://", 1), code=301)
-
     return None
 
 
@@ -478,15 +478,19 @@ def set_security_headers(response):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    response.headers[
-        "Content-Security-Policy"
-    ] = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
-
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "script-src 'self' https://cdn.jsdelivr.net; "  # Chart.js
+        "style-src 'self'; "
+        "img-src 'self' data:"
+    )
     if is_app_service:
         response.headers["Strict-Transport-Security"] = "max-age=31536000"
-
     return response
-
 
 @app.route("/")
 def index():
@@ -645,5 +649,156 @@ def logout():
     return redirect(url_for("login"))
 
 
+_analysis_cache: dict | None = None
+_analysis_lock = threading.Lock()
+_analysis_error: str | None = None
+
+
+def _run_analysis_background() -> None:
+    global _analysis_cache, _analysis_error
+    try:
+        from basket_ml import run_basket_analysis
+        result = run_basket_analysis(csv_dir=DATA_DIR)
+        with _analysis_lock:
+            _analysis_cache = result
+            _analysis_error = None
+    except Exception as exc:
+        with _analysis_lock:
+            _analysis_error = str(exc)
+
+
+@app.route("/basket-analysis")
+def basket_analysis():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    with _analysis_lock:
+        cached = _analysis_cache
+        errored = _analysis_error
+
+    # Start background job on first visit
+    if cached is None and errored is None:
+        t = threading.Thread(target=_run_analysis_background, daemon=True)
+        t.start()
+
+    return render_template(
+        "basket_analysis.html",
+        username=session.get("username", "User"),
+        email=session.get("email", ""),
+        results=cached,
+        error=errored,
+        csrf_token=get_csrf_token(),
+    )
+
+
+@app.route("/basket-analysis/results")
+def basket_analysis_results():
+    """Polling endpoint — returns JSON status while the model runs."""
+    if not session.get("logged_in"):
+        return jsonify({"status": "unauthorized"}), 401
+
+    with _analysis_lock:
+        cached = _analysis_cache
+        errored = _analysis_error
+
+    if errored:
+        return jsonify({"status": "error", "message": errored})
+    if cached is None:
+        return jsonify({"status": "running"})
+    return jsonify({"status": "done", "data": cached})
+
+
+@app.route("/basket-analysis/refresh", methods=["POST"])
+def basket_analysis_refresh():
+    """Force a fresh run — useful after uploading new data."""
+    if not session.get("logged_in"):
+        return jsonify({"status": "unauthorized"}), 401
+    if not is_valid_csrf(request.form.get("csrf_token", "")):
+        return jsonify({"status": "forbidden"}), 403
+
+    global _analysis_cache, _analysis_error
+    with _analysis_lock:
+        _analysis_cache = None
+        _analysis_error = None
+
+    t = threading.Thread(target=_run_analysis_background, daemon=True)
+    t.start()
+    return jsonify({"status": "started"})
+
+
+_churn_cache: dict | None = None
+_churn_lock = threading.Lock()
+_churn_error: str | None = None
+ 
+ 
+def _run_churn_background() -> None:
+    global _churn_cache, _churn_error
+    try:
+        from churn_ml import run_churn_analysis
+        result = run_churn_analysis(csv_dir=DATA_DIR)
+        with _churn_lock:
+            _churn_cache = result
+            _churn_error = None
+    except Exception as exc:
+        with _churn_lock:
+            _churn_error = str(exc)
+ 
+ 
+@app.route("/churn")
+def churn():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+ 
+    with _churn_lock:
+        cached = _churn_cache
+        errored = _churn_error
+ 
+    if cached is None and errored is None:
+        t = threading.Thread(target=_run_churn_background, daemon=True)
+        t.start()
+ 
+    return render_template(
+        "churn.html",
+        username=session.get("username", "User"),
+        email=session.get("email", ""),
+        results=cached,
+        error=errored,
+        csrf_token=get_csrf_token(),
+    )
+ 
+ 
+@app.route("/churn/results")
+def churn_results():
+    if not session.get("logged_in"):
+        return jsonify({"status": "unauthorized"}), 401
+ 
+    with _churn_lock:
+        cached = _churn_cache
+        errored = _churn_error
+ 
+    if errored:
+        return jsonify({"status": "error", "message": errored})
+    if cached is None:
+        return jsonify({"status": "running"})
+    return jsonify({"status": "done", "data": cached})
+ 
+ 
+@app.route("/churn/refresh", methods=["POST"])
+def churn_refresh():
+    if not session.get("logged_in"):
+        return jsonify({"status": "unauthorized"}), 401
+    if not is_valid_csrf(request.form.get("csrf_token", "")):
+        return jsonify({"status": "forbidden"}), 403
+ 
+    global _churn_cache, _churn_error
+    with _churn_lock:
+        _churn_cache = None
+        _churn_error = None
+ 
+    t = threading.Thread(target=_run_churn_background, daemon=True)
+    t.start()
+    return jsonify({"status": "started"})
+ 
+ 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)

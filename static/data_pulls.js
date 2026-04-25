@@ -14,7 +14,7 @@
   });
 
   hshd10Btn.addEventListener('click', function () {
-    input.value = '10';
+    input.value = '0010';
     form.submit();
   });
 })();

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Pulls</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Data Pulls</h1>
+    <div class="topbar-actions">
+      <a class="link-button" href="{{ url_for('dashboard') }}">Dashboard</a>
+      <form method="post" action="{{ url_for('logout') }}">
+        <input id="logout_csrf_token" name="csrf_token" type="hidden" value="{{ csrf_token }}">
+        <button type="submit" class="secondary">Log Out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="dashboard-wrap wide-wrap">
+    <section class="card">
+      <h2>Household Transaction Pull</h2>
+      <p class="subtext">Signed in as {{ email }}</p>
+
+      {% if error %}
+      <p class="error" role="alert">{{ error }}</p>
+      {% endif %}
+
+      <form method="get" action="{{ url_for('data_pulls') }}" class="query-form" id="dataPullForm">
+        <label for="hshd_num">hshd_num</label>
+        <input id="hshd_num" name="hshd_num" type="text" value="{{ hshd_num }}" placeholder="Enter household number" autocomplete="off">
+        <div class="query-actions">
+          <button type="submit">Query</button>
+          <button type="button" class="secondary" id="clearBtn">Clear</button>
+          <button type="button" class="secondary" id="autoClear10Btn">Auto-Clear on 10</button>
+        </div>
+      </form>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Hshd_num</th>
+              <th>Basket_num</th>
+              <th>Product_num</th>
+              <th>Department</th>
+              <th>Commodity</th>
+              <th>Spend</th>
+              <th>Units</th>
+              <th>Store_region</th>
+              <th>Week_num</th>
+              <th>Year</th>
+              <th>Loyalty_flag</th>
+              <th>Age_range</th>
+              <th>Marital_status</th>
+              <th>Income_range</th>
+              <th>Homeowner_desc</th>
+              <th>Hshd_size</th>
+              <th>Children</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if rows %}
+              {% for row in rows %}
+              <tr>
+                <td>{{ row.Hshd_num }}</td>
+                <td>{{ row.Basket_num }}</td>
+                <td>{{ row.Product_num }}</td>
+                <td>{{ row.Department }}</td>
+                <td>{{ row.Commodity }}</td>
+                <td>{{ row.Spend }}</td>
+                <td>{{ row.Units }}</td>
+                <td>{{ row.Store_region }}</td>
+                <td>{{ row.Week_num }}</td>
+                <td>{{ row.Year }}</td>
+                <td>{{ row.Loyalty_flag }}</td>
+                <td>{{ row.Age_range }}</td>
+                <td>{{ row.Marital_status }}</td>
+                <td>{{ row.Income_range }}</td>
+                <td>{{ row.Homeowner_desc }}</td>
+                <td>{{ row.Hshd_size }}</td>
+                <td>{{ row.Children }}</td>
+              </tr>
+              {% endfor %}
+            {% elif hshd_num %}
+              <tr>
+                <td colspan="17" class="subtext">No rows found for hshd_num {{ hshd_num }}.</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="17" class="subtext">Enter a hshd_num and click Query to load data pulls.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var input = document.getElementById('hshd_num');
+      var clearBtn = document.getElementById('clearBtn');
+      var autoClear10Btn = document.getElementById('autoClear10Btn');
+
+      clearBtn.addEventListener('click', function () {
+        input.value = '';
+        input.focus();
+      });
+
+      autoClear10Btn.addEventListener('click', function () {
+        if (input.value.trim() === '10') {
+          input.value = '';
+        }
+        input.focus();
+      });
+    })();
+  </script>
+</body>
+</html>

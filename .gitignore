@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 .env
 8451_The_Complete_Journey_2_Sample-2/
+/data/*

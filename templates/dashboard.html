@@ -11,7 +11,7 @@
   <header class="topbar">
     <h1>Welcome, {{ username }}</h1>
     <nav class="topbar-nav">
-      <a href="{{ url_for('data_pulls') }}" class="nav-link">Data Pulls</a>
+      <a href="{{ url_for('data_pulls') }}" class="secondary" style="text-decoration:none;">Data Pulls</a>
       <form method="post" action="{{ url_for('logout') }}" class="logout-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="secondary">Log Out</button>

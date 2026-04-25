@@ -1,11 +1,11 @@
 import os
 import hmac
 import secrets
-import csv
-from datetime import datetime
-from functools import lru_cache
-from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 
+import psycopg
+from psycopg.rows import dict_row
 from flask import Flask, redirect, render_template, request, session, url_for
 
 
@@ -30,138 +30,188 @@ app.config.update(
 APP_USERNAME = os.environ.get("APP_USERNAME", "admin")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "password123")
 APP_EMAIL = os.environ.get("APP_EMAIL", "admin@example.com")
-DATA_DIR = Path(__file__).resolve().parent / "8451_The_Complete_Journey_2_Sample-2"
 
 
-def _normalize(value: str) -> str:
-    return (value or "").strip()
+def _normalize_conninfo_key(raw_key: str) -> str:
+    return raw_key.lower().replace(" ", "").replace("_", "")
 
 
-@lru_cache(maxsize=1)
-def load_households() -> dict[str, dict[str, str]]:
-    households_path = DATA_DIR / "400_households.csv"
-    households: dict[str, dict[str, str]] = {}
-
-    with households_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
-        reader = csv.DictReader(csv_file)
-        for row in reader:
-            hshd_num = _normalize(row.get("HSHD_NUM"))
-            if not hshd_num:
-                continue
-            households[hshd_num] = {
-                "loyalty_flag": _normalize(row.get("L")),
-                "age_range": _normalize(row.get("AGE_RANGE")),
-                "marital_status": _normalize(row.get("MARITAL")),
-                "income_range": _normalize(row.get("INCOME_RANGE")),
-                "homeowner_desc": _normalize(row.get("HOMEOWNER")),
-                "hshd_size": _normalize(row.get("HH_SIZE")),
-                "children": _normalize(row.get("CHILDREN")),
-            }
-
-    return households
-
-
-@lru_cache(maxsize=1)
-def load_products() -> dict[str, dict[str, str]]:
-    products_path = DATA_DIR / "400_products.csv"
-    products: dict[str, dict[str, str]] = {}
-
-    with products_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
-        reader = csv.DictReader(csv_file)
-        for row in reader:
-            product_num = _normalize(row.get("PRODUCT_NUM"))
-            if not product_num:
-                continue
-            products[product_num] = {
-                "department": _normalize(row.get("DEPARTMENT")),
-                "commodity": _normalize(row.get("COMMODITY")),
-            }
-
-    return products
-
-
-@lru_cache(maxsize=1)
-def load_transactions() -> list[dict[str, object]]:
-    transactions_path = DATA_DIR / "400_transactions.csv"
-    transactions: list[dict[str, object]] = []
-
-    with transactions_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
-        reader = csv.DictReader(csv_file)
-        for row in reader:
-            purchase_date_str = _normalize(row.get("PURCHASE_"))
-            if purchase_date_str:
-                purchase_date = datetime.strptime(purchase_date_str, "%d-%b-%y").date()
-            else:
-                purchase_date = datetime.min.date()
-
-            transactions.append(
-                {
-                    "hshd_num": _normalize(row.get("HSHD_NUM")),
-                    "basket_num": _normalize(row.get("BASKET_NUM")),
-                    "product_num": _normalize(row.get("PRODUCT_NUM")),
-                    "spend": _normalize(row.get("SPEND")),
-                    "units": _normalize(row.get("UNITS")),
-                    "store_region": _normalize(row.get("STORE_R")),
-                    "week_num": _normalize(row.get("WEEK_NUM")),
-                    "year": _normalize(row.get("YEAR")),
-                    "purchase_date": purchase_date,
-                }
-            )
-
-    return transactions
-
-
-def fetch_data_pulls(hshd_num: str) -> list[dict[str, str]]:
-    households = load_households()
-    products = load_products()
-    transactions = load_transactions()
-
-    household = households.get(hshd_num, {})
-    rows: list[dict[str, str]] = []
-
-    for tx in transactions:
-        if tx["hshd_num"] != hshd_num:
+def _parse_semicolon_connstr(conn_str: str) -> dict[str, Any]:
+    parts = [segment.strip() for segment in conn_str.split(";") if segment.strip()]
+    values: dict[str, str] = {}
+    for part in parts:
+        if "=" not in part:
             continue
+        key, value = part.split("=", 1)
+        values[_normalize_conninfo_key(key)] = value.strip()
 
-        product = products.get(tx["product_num"], {})
-        rows.append(
-            {
-                "Hshd_num": tx["hshd_num"],
-                "Basket_num": tx["basket_num"],
-                "Product_num": tx["product_num"],
-                "Department": product.get("department", ""),
-                "Commodity": product.get("commodity", ""),
-                "Spend": tx["spend"],
-                "Units": tx["units"],
-                "Store_region": tx["store_region"],
-                "Week_num": tx["week_num"],
-                "Year": tx["year"],
-                "Loyalty_flag": household.get("loyalty_flag", ""),
-                "Age_range": household.get("age_range", ""),
-                "Marital_status": household.get("marital_status", ""),
-                "Income_range": household.get("income_range", ""),
-                "Homeowner_desc": household.get("homeowner_desc", ""),
-                "Hshd_size": household.get("hshd_size", ""),
-                "Children": household.get("children", ""),
-                "_sort_date": tx["purchase_date"],
-            }
-        )
+    host = values.get("host") or values.get("server")
+    dbname = values.get("database") or values.get("dbname")
+    user = values.get("username") or values.get("user") or values.get("uid")
+    password = values.get("password") or values.get("pwd")
+    port = values.get("port", "5432")
+    sslmode = values.get("sslmode") or values.get("ssl") or "require"
 
-    rows.sort(
-        key=lambda row: (
-            row["Hshd_num"],
-            row["Basket_num"],
-            row["_sort_date"],
-            row["Product_num"],
-            row["Department"],
-            row["Commodity"],
+    if host and dbname and user and password:
+        return {
+            "host": host,
+            "dbname": dbname,
+            "user": user,
+            "password": password,
+            "port": port,
+            "sslmode": sslmode,
+        }
+
+    return {}
+
+
+def _connect_kwargs_from_url(database_url: str) -> dict[str, Any]:
+    parsed = urlparse(database_url)
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        return {"conninfo": database_url}
+
+    query_params = parse_qs(parsed.query)
+    sslmode = query_params.get("sslmode", ["require"])[0]
+
+    return {
+        "host": parsed.hostname,
+        "dbname": parsed.path.lstrip("/"),
+        "user": parsed.username,
+        "password": parsed.password,
+        "port": parsed.port or 5432,
+        "sslmode": sslmode,
+    }
+
+
+def get_db_connect_kwargs() -> dict[str, Any]:
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        return _connect_kwargs_from_url(database_url)
+
+    for key, value in os.environ.items():
+        if key.startswith("POSTGRESQLCONNSTR_") and value:
+            parsed = _parse_semicolon_connstr(value)
+            if parsed:
+                return parsed
+
+    host = os.environ.get("PGHOST")
+    dbname = os.environ.get("PGDATABASE")
+    user = os.environ.get("PGUSER")
+    password = os.environ.get("PGPASSWORD")
+    port = os.environ.get("PGPORT", "5432")
+    sslmode = os.environ.get("PGSSLMODE", "require")
+
+    if host and dbname and user and password:
+        return {
+            "host": host,
+            "dbname": dbname,
+            "user": user,
+            "password": password,
+            "port": port,
+            "sslmode": sslmode,
+        }
+
+    host = os.environ.get("POSTGRES_HOST")
+    dbname = os.environ.get("POSTGRES_DB")
+    user = os.environ.get("POSTGRES_USER")
+    password = os.environ.get("POSTGRES_PASSWORD")
+    port = os.environ.get("POSTGRES_PORT", "5432")
+    sslmode = os.environ.get("POSTGRES_SSLMODE", "require")
+
+    if host and dbname and user and password:
+        return {
+            "host": host,
+            "dbname": dbname,
+            "user": user,
+            "password": password,
+            "port": port,
+            "sslmode": sslmode,
+        }
+
+    present_keys = [
+        key
+        for key in (
+            "DATABASE_URL",
+            "PGHOST",
+            "PGDATABASE",
+            "PGUSER",
+            "PGPASSWORD",
+            "POSTGRES_HOST",
+            "POSTGRES_DB",
+            "POSTGRES_USER",
+            "POSTGRES_PASSWORD",
         )
+        if os.environ.get(key)
+    ]
+    present = ", ".join(present_keys) if present_keys else "none"
+    raise RuntimeError(
+        "PostgreSQL connection settings are not configured. "
+        "Set DATABASE_URL, or PGHOST/PGDATABASE/PGUSER/PGPASSWORD, "
+        "or POSTGRES_HOST/POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD. "
+        f"Present keys: {present}."
     )
 
-    for row in rows:
-        row.pop("_sort_date", None)
 
-    return rows
+def fetch_data_pulls(hshd_num: str) -> list[dict[str, Any]]:
+    query = """
+        SELECT
+            t.hshd_num,
+            t.basket_num,
+            t.product_num,
+            COALESCE(p.department, '') AS department,
+            COALESCE(p.commodity, '') AS commodity,
+            t.spend,
+            t.units,
+            COALESCE(t.store_r, '') AS store_region,
+            t.week_num,
+            t.year,
+            COALESCE(h.loyalty_flag, '') AS loyalty_flag,
+            COALESCE(h.age_range, '') AS age_range,
+            COALESCE(h.marital, '') AS marital_status,
+            COALESCE(h.income_range, '') AS income_range,
+            COALESCE(h.homeowner, '') AS homeowner_desc,
+            COALESCE(h.hh_size, '') AS hshd_size,
+            COALESCE(h.children, '') AS children
+        FROM retail.transactions t
+        LEFT JOIN retail.products p ON p.product_num = t.product_num
+        LEFT JOIN retail.households h ON h.hshd_num = t.hshd_num
+        WHERE t.hshd_num = %(hshd_num)s
+        ORDER BY
+            t.hshd_num,
+            t.basket_num,
+            t.purchase_date,
+            t.product_num,
+            p.department,
+            p.commodity
+    """
+
+    with psycopg.connect(**get_db_connect_kwargs(), row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, {"hshd_num": hshd_num})
+            db_rows = cur.fetchall()
+
+    return [
+        {
+            "Hshd_num": row["hshd_num"],
+            "Basket_num": row["basket_num"],
+            "Product_num": row["product_num"],
+            "Department": row["department"],
+            "Commodity": row["commodity"],
+            "Spend": row["spend"],
+            "Units": row["units"],
+            "Store_region": row["store_region"],
+            "Week_num": row["week_num"],
+            "Year": row["year"],
+            "Loyalty_flag": row["loyalty_flag"],
+            "Age_range": row["age_range"],
+            "Marital_status": row["marital_status"],
+            "Income_range": row["income_range"],
+            "Homeowner_desc": row["homeowner_desc"],
+            "Hshd_size": row["hshd_size"],
+            "Children": row["children"],
+        }
+        for row in db_rows
+    ]
 
 
 def get_csrf_token() -> str:
@@ -257,14 +307,21 @@ def data_pulls():
         return redirect(url_for("login"))
 
     hshd_num = request.args.get("hshd_num", "").strip()
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     error = None
 
     if hshd_num:
         if not hshd_num.isdigit():
             error = "Please enter a numeric hshd_num value."
         else:
-            rows = fetch_data_pulls(hshd_num)
+            try:
+                rows = fetch_data_pulls(hshd_num)
+            except RuntimeError as exc:
+                error = str(exc)
+            except psycopg.Error as exc:
+                error = f"Unable to query PostgreSQL right now: {exc.__class__.__name__}."
+            except Exception:
+                error = "Unable to load data pulls right now. Please try again shortly."
 
     return render_template(
         "data_pulls.html",
@@ -275,6 +332,24 @@ def data_pulls():
         rows=rows,
         error=error,
     )
+
+
+@app.route("/db-health")
+def db_health():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    try:
+        with psycopg.connect(**get_db_connect_kwargs(), row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 AS ok")
+                row = cur.fetchone()
+                if row and row.get("ok") == 1:
+                    return {"ok": True, "database": "reachable"}, 200
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}, 500
+
+    return {"ok": False, "error": "Unknown connectivity error."}, 500
 
 
 @app.route("/logout", methods=["POST"])

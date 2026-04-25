@@ -33,7 +33,7 @@
         <div class="query-actions">
           <button type="submit">Query</button>
           <button type="button" class="secondary" id="clearBtn">Clear</button>
-          <button type="button" class="secondary" id="autoClear10Btn">Auto-Clear on 10</button>
+          <button type="button" class="secondary" id="hshd10Btn">HSHD 10</button>
         </div>
       </form>
 
@@ -97,25 +97,6 @@
       </div>
     </section>
   </main>
-
-  <script>
-    (function () {
-      var input = document.getElementById('hshd_num');
-      var clearBtn = document.getElementById('clearBtn');
-      var autoClear10Btn = document.getElementById('autoClear10Btn');
-
-      clearBtn.addEventListener('click', function () {
-        input.value = '';
-        input.focus();
-      });
-
-      autoClear10Btn.addEventListener('click', function () {
-        if (input.value.trim() === '10') {
-          input.value = '';
-        }
-        input.focus();
-      });
-    })();
-  </script>
+  <script src="{{ url_for('static', filename='data_pulls.js') }}"></script>
 </body>
 </html>
